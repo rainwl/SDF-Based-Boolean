@@ -392,7 +392,7 @@ namespace Source.SDFs.Editor
                 MeshSampleComputeShader.SetVector(Properties.MinBoundsVector3, minBounds);
                 MeshSampleComputeShader.SetVector(Properties.MaxBoundsVector3, maxBounds);
 
-                int threadGroups = Mathf.CeilToInt(_size / 8f);
+                var threadGroups = Mathf.CeilToInt(_size / 8f);
                 MeshSampleComputeShader.Dispatch(GetTextureWholeKernel, threadGroups, threadGroups, threadGroups);
 
                 SamplesBuffer.GetData(_samples);
