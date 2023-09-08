@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using JetBrains.Annotations;
+using Source.Utilities;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -578,17 +579,5 @@ namespace Source.SDFs.Editor
         }
 
         #endregion
-    }
-
-    public static class Utils
-    {
-        /// <summary>
-        /// An ICollection has a count property available that is O(1), an enumerable that is also a collection will 
-        /// prefer to use this extension without the need to use the Any() method
-        /// </summary>
-        public static bool IsNullOrEmpty<T>(this ICollection<T> collection)
-        {
-            return collection == null || collection.Count == 0;
-        }
     }
 }
