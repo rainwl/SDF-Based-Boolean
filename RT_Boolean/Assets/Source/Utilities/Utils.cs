@@ -125,16 +125,20 @@ namespace Source.Utilities
 
             return CreateAsset<T>(path, name);
         }
-
+        
         /// <summary>
-        //	This makes it easy to create, name and place unique new ScriptableObject asset files.
+        /// This makes it easy to create, name and place unique new ScriptableObject asset files.
         /// </summary>
+        /// <param name="path"></param>
+        /// <param name="name"></param>
+        /// <typeparam name="T"></typeparam>
+        /// <returns></returns>
         public static T CreateAsset<T>(string path, string name = null) where T : ScriptableObject
         {
-            T asset = ScriptableObject.CreateInstance<T>();
-            string assetPathAndName = AssetDatabase.GenerateUniqueAssetPath(path + name + ".asset");
+            var asset = ScriptableObject.CreateInstance<T>();
+            var assetPathAndName = AssetDatabase.GenerateUniqueAssetPath(path + name + ".asset");
 
-            Debug.Log(path + name + ".asset");
+            //Debug.Log(path + name + ".asset");
 
             AssetDatabase.CreateAsset(asset, assetPathAndName);
 

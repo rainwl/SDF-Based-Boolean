@@ -3,7 +3,12 @@ guid: 216752ed2be5506419c5160f4df4cd7f
 MonoImporter:
   externalObjects: {}
   serializedVersion: 2
-  defaultReferences: []
+  defaultReferences:
+  - m_ViewDataDictionary: {instanceID: 0}
+  - meshSampleComputeShader: {fileID: 7200000, guid: 76b27067275eac4469d3abe970705bcc, type: 3}
+  - tesselationComputeShader: {fileID: 7200000, guid: 273e8b442250b5f4c9eb76775bf398f1, type: 3}
+  - tessellatedMesh: {instanceID: 0}
+  - mesh: {instanceID: 0}
   executionOrder: 0
   icon: {instanceID: 0}
   userData: 

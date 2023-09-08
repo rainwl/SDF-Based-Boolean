@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using JetBrains.Annotations;
 using Source.Utilities;
 using UnityEditor;
@@ -14,7 +13,7 @@ namespace Source.SDFs.Editor
 
         private static Mesh2SDFGenerator _window;
 
-        private int _lastSubdivisionLevel = 0;
+        private int _lastSubdivisionLevel;
         private float[] _samples;
         private float[] _packedUVs;
         private Vector2 _scrollPos;
@@ -34,7 +33,7 @@ namespace Source.SDFs.Editor
         [SerializeField] [HideInInspector] private ComputeShader tesselationComputeShader;
         [SerializeField] private Mesh tessellatedMesh;
         [SerializeField] private Mesh mesh;
-        [SerializeField] private int size = 128;
+        [SerializeField] [Min(1)] private int size = 128;
         [SerializeField] private int subdivisions = 1;
         [SerializeField] private float padding = 0.2f;
         [SerializeField] private float minimumEdgeLength = 0.15f;
@@ -76,9 +75,7 @@ namespace Source.SDFs.Editor
             }
 
             if (isAutoSaveOnComplete)
-            {
                 Save();
-            }
         }
 
         private void Save()
@@ -242,6 +239,8 @@ namespace Source.SDFs.Editor
             private int Dimensions => _size * _size * _size;
 
             #endregion
+
+            #region Methods
 
             public ComputeSession(ComputeShader meshSampleComputeShader, ComputeShader tesselationComputeShader,
                 int size, float padding, bool sampleUVs, Matrix4x4 transform)
@@ -546,6 +545,8 @@ namespace Source.SDFs.Editor
                     triangles = outputTriangles;
                 }
             }
+
+            #endregion
 
             private static class Properties
             {
