@@ -1,2 +1,19 @@
 
 .idea/
+
+*.csproj
+
+*.sln
+
+RT_Boolean/Library/
+
+RT_Boolean/Logs/
+
+RT_Boolean/Packages/
+
+RT_Boolean/Temp/
+
+RT_Boolean/UserSettings/
+
+RT_Boolean/ProjectSettings/
+
