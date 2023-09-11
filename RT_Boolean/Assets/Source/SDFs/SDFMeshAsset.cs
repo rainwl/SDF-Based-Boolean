@@ -23,9 +23,9 @@ namespace Source.SDFs
         public bool HasUVs => !packedUVs.IsNullOrEmpty();
         public bool IsTessellated => tessellationLevel > 0;
         public float Padding => padding;
-        private Vector3 MinBounds => minBounds;
-        private Vector3 MaxBounds => maxBounds;
-        private Vector3 Centre => (maxBounds + minBounds) * 0.5f;
+        public Vector3 MinBounds => minBounds;
+        public Vector3 MaxBounds => maxBounds;
+        public Vector3 Centre => (maxBounds + minBounds) * 0.5f;
         public Bounds Bounds => new Bounds(Centre, MaxBounds - MinBounds);
         public Mesh SourceMesh => sourceMesh;
 

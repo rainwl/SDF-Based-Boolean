@@ -24,6 +24,12 @@ uint _TriangleCount;
 uint _VertexCount;
 float4x4 _ModelTransformMatrix;
 
+// 这个函数 TexelToPosition 负责将纹理坐标索引（x，y，z)转换为实际的3D位置（xCoord，yCoord，zCoord).
+// 以下是整个过程的详细步骤：
+// _Size 代表纹理的尺寸 (宽度，长度，或者高度), sizeMinusOne 是纹理尺寸减一的结果，这有助于将尺寸索引归一化到 [0, 1] 的范围。
+// 使用 remap 函数为每个坐标（x，y，z）计算实际的3D位置。这个函数做的是对输入值进行线性插值（Lerp）。这里将纹理索引从 [0, sizeMinusOne] 映射到了 [ _MinBounds.x 或 y, _MaxBounds.x 或 y]。 _MinBounds 和 _MaxBounds 应该是一个固定的3D模型的边界。由于纹理索引是整数，所以这个步骤能够将整数坐标映射到实际的浮点数位置。
+// 最后，函数返回计算得到的 3D 坐标。
+// 简单来说，TexelToPosition 函数接收一个 3D 纹理的 (x, y, z) 索引，然后将其转换为模型空间中的真实位置。
 float3 TexelToPosition(int x, int y, int z)
 {
     uint sizeMinusOne = _Size - 1;
@@ -33,6 +39,18 @@ float3 TexelToPosition(int x, int y, int z)
     return float3(xCoord, yCoord, zCoord);
 }
 
+
+// 这段代码是一个 HLSL（High-Level Shading Language）的计算着色器（Compute shader），通常用来在 GPU 上解决高并行性的问题。
+// 从名字（CS_ComputeMeshBounds）来看，这个着色器的目的是计算一个三角形网格模型的包围盒。
+// 具体步骤解释如下：
+// 计算着色器是以线程组执行的。每个线程组中的线程数由 [numthreads(64, 1, 1)] 属性定义。在本例中，每个线程组包含64个线程。
+// 每个线程通过系统值语义 SV_DispatchThreadID 获取其全局线程 ID。
+// 更新 _TriangleCount减去2。当 _TriangleCount减去2后的值大于或等于 i（当前线程中的三角形索引）时，我们将有效地逐个处理输入的三角形集。否则，当前线程不处理任何数据同时返回。
+// 然后，每个线程从 _InputTriangles 数据中提取三个索引，这些索引将用于从 _InputVertices 中获取对应的三维顶点。这些顶点位置经过模型变换矩阵 _ModelTransformMatrix 的变换后确定其在世界坐标下的位置。
+// 设置 packingMultiplier为1000，这是将浮点值转换为整数以进行比较的过程中的乘法因子。
+// 对于三角形的每个轴（X、Y 和 Z 轴）计算最小和最大值，这样可以找出包含这个三角形的最小包围盒。
+// 计算的最小和最大轴值将被乘以 packingMultiplier 转化为整数，然后通过 InterlockedMin 和 InterlockedMax 函数分别更新 _BoundsBuffer 中的最小和最大界限。这使用了原子操作，只有一个线程可以在任何一次进行此操作，这对于并行运算的环境是必要的，以防止数据竞争。
+// 最后，结果是一个包含 3D 模型包围盒最小和最大界限的 _BoundsBuffer，所以可以确定模型在世界坐标空间中的大小和位置。
 [numthreads(64, 1, 1)]
 void CS_ComputeMeshBounds(uint3 id : SV_DispatchThreadID)
 {
