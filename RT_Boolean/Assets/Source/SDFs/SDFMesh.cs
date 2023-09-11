@@ -1,8 +1,9 @@
-using System;
 using Source.Utilities;
-using UnityEditor;
 using UnityEngine;
-using UnityEngine.Rendering.UI;
+
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 // ReSharper disable Unity.NoNullPropagation
 
@@ -13,11 +14,11 @@ namespace Source.SDFs
         #region Fields
 
         [SerializeField] private SDFMeshAsset asset;
-        public SDFMeshAsset Asset => asset;
-        public int ID => asset.GetInstanceID();
-
         [SerializeField] protected SDFCombineType operation;
         [SerializeField] protected bool flip;
+
+        public SDFMeshAsset Asset => asset;
+        public int ID => asset.GetInstanceID();
 
         #endregion
 
@@ -66,6 +67,7 @@ namespace Source.SDFs
                 Smoothing = Mathf.Max(MinSmoothing, smoothing)
             };
         }
+        
 #if UNITY_EDITOR
         private void OnDrawGizmosSelected()
         {

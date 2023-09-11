@@ -81,7 +81,7 @@ namespace Source.SDFs
         private readonly List<SDFMaterialGPU> _materials = new List<SDFMaterialGPU>();
         private readonly List<int> _dataSiblingIndices = new List<int>();
 
-        private bool IsEmpty => _sdfObjects.IsNullOrEmpty();
+        public bool IsEmpty => _sdfObjects.IsNullOrEmpty();
 
         // dirty flags. we only need one for the primitives, but two for the meshes. this is because
         // i want to avoid doing a 'full update' of the meshes unless i really need to.

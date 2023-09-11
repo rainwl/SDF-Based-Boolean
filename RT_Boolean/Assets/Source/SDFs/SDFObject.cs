@@ -4,6 +4,7 @@ using UnityEngine.Serialization;
 
 namespace Source.SDFs
 {
+    [ExecuteInEditMode]
     public abstract class SDFObject : MonoBehaviour
     {
         #region Fields
@@ -12,15 +13,12 @@ namespace Source.SDFs
         [SerializeField] protected float smoothing = MinSmoothing;
         [SerializeField] [ReadOnly] private SDFGroup sdfGroup;
 
-        [SerializeField] private readonly SDFMaterial _material =
+        [SerializeField] private SDFMaterial material =
             new SDFMaterial(Color.white, Color.black, 0.5f, 0.5f, Color.black, 0f, 0.1f);
 
-        private bool _isDirty = false;
-        private bool _isOrderDirty = false;
         private int _lastSeenSiblingIndex = -1;
 
-
-        public SDFGroup Group
+        protected SDFGroup Group
         {
             get
             {
@@ -30,9 +28,10 @@ namespace Source.SDFs
             }
         }
 
-        public SDFMaterial Material => _material;
-        public bool IsDirty => _isDirty;
-        public bool IsOrderDirty => _isOrderDirty;
+        public SDFMaterial Material => material;
+        public bool IsDirty { get; private set; } = false;
+
+        public bool IsOrderDirty { get; private set; } = false;
 
         #endregion
 
@@ -45,7 +44,21 @@ namespace Source.SDFs
         protected virtual void OnDestroy() => TryDeregister();
         protected virtual void OnValidate() => SetDirty();
 
-        #endregion
+        protected virtual void Update()
+        {
+            IsDirty |= transform.hasChanged;
+
+            var siblingIndex = transform.GetSiblingIndex();
+
+            if (siblingIndex != _lastSeenSiblingIndex)
+            {
+                if (_lastSeenSiblingIndex != -1)
+                    IsOrderDirty = true;
+                _lastSeenSiblingIndex = siblingIndex;
+            }
+
+            transform.hasChanged = false;
+        }
 
         /// <summary>
         /// Get 'SDFGroup' Component in Parent
@@ -63,38 +76,28 @@ namespace Source.SDFs
             SetDirty();
         }
 
-        public abstract SdfGpuData GetSdfGpuData(int sampleStartIndex = -1, int uvStartIndex = -1);
-        public SDFMaterialGPU GetMaterial() => new SDFMaterialGPU(_material);
+        #endregion
 
-        protected void SetDirty() => _isDirty = true;
+
+        #region Other Methods
+
+        public abstract SdfGpuData GetSdfGpuData(int sampleStartIndex = -1, int uvStartIndex = -1);
+        public SDFMaterialGPU GetMaterial() => new SDFMaterialGPU(material);
+
+        protected void SetDirty() => IsDirty = true;
 
         public void SetClean()
         {
-            _isDirty = false;
+            IsDirty = false;
             transform.hasChanged = false;
         }
 
         public void SetOrderClean()
         {
-            _isOrderDirty = false;
+            IsOrderDirty = false;
         }
 
-        protected virtual void Update()
-        {
-            _isDirty |= transform.hasChanged;
-
-            int siblingIndex = transform.GetSiblingIndex();
-
-            if (siblingIndex != _lastSeenSiblingIndex)
-            {
-                if (_lastSeenSiblingIndex != -1)
-                    _isOrderDirty = true;
-
-                _lastSeenSiblingIndex = siblingIndex;
-            }
-
-            transform.hasChanged = false;
-        }
+        #endregion
     }
 
     public enum SDFCombineType
