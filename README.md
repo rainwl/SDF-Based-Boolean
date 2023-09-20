@@ -45,6 +45,9 @@ https://imstk.gitlab.io/Dynamical_Models/LevelSetModel.html
 ### ISO Mesh
 https://github.com/EmmetOT/IsoMesh.git
 
+https://swiftcoder.wordpress.com/planets/isosurface-extraction/
+
+https://www.boristhebrave.com/2018/04/15/dual-contouring-tutorial/
 
 
 ## Reference
