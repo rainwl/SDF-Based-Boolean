@@ -1203,7 +1203,7 @@ namespace Source.SDFs
 
         #region Grid Helper Functions
 
-        private Vector3 CellCoordinateToVertex(int x, int y, int z)
+        public Vector3 CellCoordinateToVertex(int x, int y, int z)
         {
             var gridSize = (float)(voxelSettings.SamplesPerSide - 1f);
             var bound = (gridSize / 2f) * voxelSettings.CellSize;
@@ -1218,7 +1218,7 @@ namespace Source.SDFs
         public Vector3 CellCoordinateToVertex(Vector3Int vec) =>
             CellCoordinateToVertex(vec.x, vec.y, vec.z);
 
-        private Vector3Int IndexToCellCoordinate(int index)
+        public Vector3Int IndexToCellCoordinate(int index)
         {
             int samplesPerSide = voxelSettings.SamplesPerSide;
 
@@ -1236,7 +1236,7 @@ namespace Source.SDFs
             return CellCoordinateToVertex(coords.x, coords.y, coords.z);
         }
 
-        private int CellCoordinateToIndex(int x, int y, int z) =>
+        public int CellCoordinateToIndex(int x, int y, int z) =>
             (x + y * voxelSettings.SamplesPerSide +
              z * voxelSettings.SamplesPerSide * voxelSettings.SamplesPerSide);
 

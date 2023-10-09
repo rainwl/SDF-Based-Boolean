@@ -107,7 +107,7 @@ namespace Source.SDFs.Editor
                     _inputMeshPreview = UnityEditor.Editor.CreateEditor(mesh);
                 }
 
-                _inputMeshPreview.DrawPreview(GUILayoutUtility.GetRect(200, 200));
+                _inputMeshPreview.DrawPreview(GUILayoutUtility.GetRect(300, 300));
             }
 
             size = Mathf.Max(1, EditorGUILayout.IntField($"Size", size));
@@ -192,13 +192,14 @@ namespace Source.SDFs.Editor
         {
             #region Fields
 
-            private ComputeBuffer _inputVerticesBuffer;
-            private ComputeBuffer _inputTrianglesBuffer;
-            private ComputeBuffer _inputNormalsBuffer;
+            private ComputeBuffer _inputVerticesBuffer;//StructuredBuffer<float3> _InputVertices;
+            private ComputeBuffer _inputTrianglesBuffer;//StructuredBuffer<int> _InputTriangles;
+            private ComputeBuffer _inputNormalsBuffer;//StructuredBuffer<float3> _InputNormals;
             private ComputeBuffer _inputTangentsBuffer;
-            private ComputeBuffer _inputUVsBuffer;
+            private ComputeBuffer _inputUVsBuffer;//StructuredBuffer<float2> _InputUVs;
 
-            private ComputeBuffer _outputVerticesBuffer;
+            // OutPut --> ComputeShader_Tessellate.compute
+            private ComputeBuffer _outputVerticesBuffer; 
             private ComputeBuffer _outputTrianglesBuffer;
             private ComputeBuffer _outputNormalsBuffer;
             private ComputeBuffer _outputTangentsBuffer;
@@ -317,12 +318,12 @@ namespace Source.SDFs.Editor
                 _inputVerticesBuffer.SetData(_vertices);
 
                 MeshSampleComputeShader.SetBuffer(ComputeBoundsKernel, Properties.InputTrianglesStructuredBuffer,
-                    _inputTrianglesBuffer);
+                    _inputTrianglesBuffer);//Compute_SDFMesh.compute , kernel CS_ComputeMeshBounds
                 MeshSampleComputeShader.SetBuffer(ComputeBoundsKernel, Properties.InputVerticesStructuredBuffer,
                     _inputVerticesBuffer);
 
                 MeshSampleComputeShader.SetBuffer(GetTextureWholeKernel, Properties.InputTrianglesStructuredBuffer,
-                    _inputTrianglesBuffer);
+                    _inputTrianglesBuffer);// kernel CS_SampleMeshDistances
                 MeshSampleComputeShader.SetBuffer(GetTextureWholeKernel, Properties.InputNormalsStructuredBuffer,
                     _inputNormalsBuffer);
                 MeshSampleComputeShader.SetBuffer(GetTextureWholeKernel, Properties.InputVerticesStructuredBuffer,
@@ -342,10 +343,18 @@ namespace Source.SDFs.Editor
                     MeshSampleComputeShader.DisableKeyword(WriteUVsKeyword);
                 }
 
-                MeshSampleComputeShader.SetInt(Properties.TriangleCountInt, _triangles.Length);
-                MeshSampleComputeShader.SetInt(Properties.VertexCountInt, _vertices.Length);
+                MeshSampleComputeShader.SetInt(Properties.TriangleCountInt, _triangles.Length);//uint _TriangleCount;
+                MeshSampleComputeShader.SetInt(Properties.VertexCountInt, _vertices.Length);//uint _VertexCount;
 
                 RunBoundsPhase(mesh, out minBounds, out maxBounds);
+                // 计算完 min max bounds后,传递到计算采样点进行计算
+                // 这里是不是可以直接取maxBounds,作为一个cube
+                
+                maxBounds.x = Mathf.CeilToInt(maxBounds.x);
+                maxBounds.y = Mathf.CeilToInt(maxBounds.y);
+                maxBounds.z = Mathf.CeilToInt(maxBounds.z);
+                minBounds = maxBounds;
+                
                 RunSamplePhase(hasUVs, out samples, out packedUVs, minBounds, maxBounds);
             }
 
@@ -550,11 +559,11 @@ namespace Source.SDFs.Editor
 
             private static class Properties
             {
-                public static readonly int InputVerticesStructuredBuffer = Shader.PropertyToID("_InputVertices");
-                public static readonly int InputNormalsStructuredBuffer = Shader.PropertyToID("_InputNormals");
-                public static readonly int InputTrianglesStructuredBuffer = Shader.PropertyToID("_InputTriangles");
+                public static readonly int InputVerticesStructuredBuffer = Shader.PropertyToID("_InputVertices");// StructuredBuffer<float3> _InputVertices;
+                public static readonly int InputNormalsStructuredBuffer = Shader.PropertyToID("_InputNormals");// StructuredBuffer<float3> _InputNormals;
+                public static readonly int InputTrianglesStructuredBuffer = Shader.PropertyToID("_InputTriangles");//StructuredBuffer<int> _InputTriangles;
                 public static readonly int InputTangentsStructuredBuffer = Shader.PropertyToID("_InputTangents");
-                public static readonly int InputUVsStructuredBuffer = Shader.PropertyToID("_InputUVs");
+                public static readonly int InputUVsStructuredBuffer = Shader.PropertyToID("_InputUVs");//_InputUVs;
 
                 public static readonly int OutputVerticesStructuredBuffer = Shader.PropertyToID("_OutputVertices");
                 public static readonly int OutputNormalsStructuredBuffer = Shader.PropertyToID("_OutputNormals");

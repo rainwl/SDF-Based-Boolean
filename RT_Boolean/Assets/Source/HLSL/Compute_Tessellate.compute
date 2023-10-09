@@ -39,6 +39,14 @@ void AddTriangle(float3 a_vert, float3 b_vert, float3 c_vert, float3 a_norm, flo
     _OutputTriangles[index + 2] = index + 2;
 }
 
+
+// 我们有 triIndex，它将线程索引乘以3。这很可能是因为一个三角形由三个顶点组成，所以所有操作都是三个一组的。
+// 然后我们检查 triIndex 是否大于 _TriangleCount。如果是，我们就立即返回并结束这个线程。这是一个常见的技巧来确保我们不会处理超出我们数据范围的线程。
+// 接下来的代码从 _InputTriangles 数组中获取三个索引 a_index，b_index 和 c_index，
+// 然后使用这些索引从 _InputVertices，_InputNormals，_InputTangents 和 _InputUVs 中获取数据。
+// 最后，我们用这些取得的数据调用了 AddTriangle 函数。
+// 总结来说，这段代码的工作原理是取得模型中的每个三角形的顶点、法线、切线和纹理坐标，并传递给 AddTriangle 函数。
+// 按照这种方式计算，所有的线程都在同时处理不同的三角形，这在处理大型模型时可以大大提高性能。
 [numthreads(64, 1, 1)]
 void CS_PreprocessMesh(uint3 id : SV_DispatchThreadID)
 {
@@ -63,6 +71,18 @@ void CS_PreprocessMesh(uint3 id : SV_DispatchThreadID)
     a_index);
 }
 
+// 这段代码是一个用HLSL编写的计算着色器，它用于对模型进行细分。细分是一种图形处理技术，用来添加更多的多边形（通常是三角形）以提高模型的详细度。
+// 以下是这段代码的具体解析：
+// 同样是numthreads (64, 1, 1)指定每个线程组的线程布局。
+// 对每个三角形的三个顶点（由三个顶点的索引决定）进行操作。
+// 对于每一个三角形的顶点，我们首先从输入数组中获取相关的位置、法线、切线和纹理坐标。
+// 然后，我们计算这三个顶点之间的距离，并计算出三个中点。
+// 我们还计算了这些中点的平均法线和切线。
+// 我们同样对UV坐标进行了类似的处理，计算了中点的UV坐标，然后让UV坐标在特定的范围内进行打包和解包操作。
+// 然后，代码检查每条边的长度是否小于或等于一个预设的最小边长 _MinimumEdgeLength。如果没有，我们使用 InterpolateSurfacePosition 函数对中点的位置进行插值处理。
+// 最后，我们用上述计算出的信息生成四个新的三角形来替代原来的那一个。这四个新三角形分别由原来的一个顶点和两个中点，两个不同的中点和下一个顶点，下一个顶点和剩下的两个中点，以及三个中点组成。 这样的计算处理结果就是原来的每个三角形被切割成了四个较小的三角形，从而实现了模型的细分处理。
+// 然后使用 AddTriangle 函数，将新生成的四个三角形添加到输出数组中。
+// 综上，这个着色器的目的是执行一种称为 "Loop subdivision" 的过程。这种方法能够增加模型的多边形数量，从而提高模型的细节度。
 [numthreads(64, 1, 1)]
 void CS_Tessellate(uint3 id : SV_DispatchThreadID)
 {

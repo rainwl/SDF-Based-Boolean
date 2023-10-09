@@ -4,7 +4,6 @@ using Source.Utilities;
 using UnityEditor;
 using UnityEditor.Compilation;
 using UnityEngine;
-using UnityEngine.Serialization;
 
 namespace Source.SDFs
 {
@@ -26,46 +25,41 @@ namespace Source.SDFs
 
         #region Fields and Properties
 
-        public const float MinSmoothing = 0.00001f;
+        private const float MinSmoothing = 0.00001f;
 
-        /// <summary>
-        /// Whether this group is actively updating.
-        /// </summary>
-        public bool IsRunning => isRunning;
-
-        [SerializeField] private bool isRunning = true;
-
-        private bool _forceUpdateNextFrame = false;
-
-        /// <summary>
-        /// Whether this group is fully set up, e.g. all the buffers are created.
-        /// 这个组是否完全建立，例如，所有的缓冲区是否已经创建。
-        /// </summary>
-        public bool IsReady { get; private set; }
-
-        [SerializeField] [HideInInspector]
-        // 当Unity回调OnEnable/OnDisable被调用时，这个bool被关闭/打开。
-        // 注意，这并不总是给出与“enabled”相同的结果，因为OnEnable/OnDisable在重新编译等过程中被调用，你基本上可以把这个bool读为“正在重新编译”
         // this bool is toggled off/on whenever the Unity callbacks OnEnable/OnDisable are called.
         // note that this doesn't always give the same result as "enabled" because OnEnable/OnDisable are
         // called during recompiles etc. you can basically read this bool as "is recompiling"
-        private bool isEnabled = false;
-
-        [SerializeField] private float normalSmoothing = 0.015f;
-        public float NormalSmoothing => normalSmoothing;
+        [SerializeField] [HideInInspector] private bool isEnabled = false;
         [SerializeField] private float thicknessMaxDistance = 0f;
         [SerializeField] private float thicknessFalloff = 0f;
-        private readonly List<ISDFGroupComponent> _sdfComponents = new List<ISDFGroupComponent>();
+        [SerializeField] private float normalSmoothing = 0.015f;
+        [SerializeField] private bool isRunning = true;
+        private bool _forceUpdateNextFrame;
+
+        public bool IsRunning => isRunning; // Whether this group is actively updating.
+
+        // Whether this group is fully set up, e.g. all the buffers are created.
+        public bool IsReady { get; private set; }
+        private bool _isLocalDataDirty = true;
+        private bool _isLocalDataOrderDirty = true;
+        private static bool _isGlobalMeshDataDirty = true;
+
+        public bool IsEmpty => _sdfObjects.IsNullOrEmpty();
+
+        // The mapper allows you to quickly query the SDF without involving the GPU.
+        private Mapper Mapper { get; } = new Mapper();
+        public float NormalSmoothing => normalSmoothing;
 
         private ComputeBuffer _dataBuffer;
         private ComputeBuffer _materialBuffer;
-
         private ComputeBuffer _settingsBuffer;
+        private static ComputeBuffer _meshSamplesBuffer;
+        private static ComputeBuffer _meshPackedUVsBuffer;
         public ComputeBuffer SettingsBuffer => _settingsBuffer;
 
         private readonly Settings[] _settingsArray = new Settings[1];
-
-        private List<SDFObject> _sdfObjects = new List<SDFObject>();
+        private readonly List<ISDFGroupComponent> _sdfComponents = new List<ISDFGroupComponent>();
 
         private static readonly List<SDFMesh> GlobalSDFMeshes = new List<SDFMesh>();
         private static readonly Dictionary<int, int> MeshSdfSampleStartIndices = new Dictionary<int, int>();
@@ -74,26 +68,10 @@ namespace Source.SDFs
         private static readonly List<float> MeshSamples = new List<float>();
         private static readonly List<float> MeshPackedUVs = new List<float>();
 
-        private static ComputeBuffer _meshSamplesBuffer;
-        private static ComputeBuffer _meshPackedUVsBuffer;
-
         private readonly List<SdfGpuData> _data = new List<SdfGpuData>();
         private readonly List<SDFMaterialGPU> _materials = new List<SDFMaterialGPU>();
         private readonly List<int> _dataSiblingIndices = new List<int>();
-
-        public bool IsEmpty => _sdfObjects.IsNullOrEmpty();
-
-        // dirty flags. we only need one for the primitives, but two for the meshes. this is because
-        // i want to avoid doing a 'full update' of the meshes unless i really need to.
-
-        private static bool _isGlobalMeshDataDirty = true;
-        private bool _isLocalDataDirty = true;
-        private bool _isLocalDataOrderDirty = true;
-
-        /// <summary>
-        /// The mapper allows you to quickly query the SDF without involving the GPU.
-        /// </summary>
-        private Mapper Mapper { get; } = new Mapper();
+        private List<SDFObject> _sdfObjects = new List<SDFObject>();
 
         #endregion
 
@@ -234,25 +212,22 @@ namespace Source.SDFs
             if (!IsReady)
                 RequestUpdate();
 
-            bool nullHit = false;
-            for (int i = 0; i < _sdfObjects.Count; i++)
+            var nullHit = false;
+            foreach (var sdfObject in _sdfObjects)
             {
-                SDFObject sdfObject = _sdfObjects[i];
-                bool isNull = !sdfObject;
+                var isNull = !sdfObject;
 
                 nullHit |= isNull;
 
-                if (!isNull)
-                {
-                    _isLocalDataDirty |= sdfObject.IsDirty;
-                    _isLocalDataOrderDirty |= sdfObject.IsOrderDirty;
-                }
+                if (isNull) continue;
+                _isLocalDataDirty |= sdfObject.IsDirty;
+                _isLocalDataOrderDirty |= sdfObject.IsOrderDirty;
             }
 
             if (nullHit)
                 ClearNulls(_sdfObjects);
 
-            bool changed = false;
+            var changed = false;
 
             if (_isLocalDataOrderDirty)
             {
@@ -270,11 +245,9 @@ namespace Source.SDFs
             _forceUpdateNextFrame = false;
             transform.hasChanged = false;
 
-            if (changed && !IsEmpty)
-            {
-                for (int i = 0; i < _sdfComponents.Count; i++)
-                    _sdfComponents[i].Run();
-            }
+            if (!changed || IsEmpty) return;
+            foreach (var sdfComponent in _sdfComponents)
+                sdfComponent.Run();
         }
 
         #endregion
@@ -299,20 +272,22 @@ namespace Source.SDFs
             _sdfComponents.AddRange(GetComponentsInChildren<ISDFGroupComponent>());
 
             if (IsEmpty)
-                for (int i = 0; i < _sdfComponents.Count; i++)
-                    _sdfComponents[i].OnEmpty();
+                foreach (var sdfComponent in _sdfComponents)
+                    sdfComponent.OnEmpty();
             else
-                for (int i = 0; i < _sdfComponents.Count; i++)
-                    _sdfComponents[i].OnNotEmpty();
+                foreach (var sdfComponent in _sdfComponents)
+                    sdfComponent.OnNotEmpty();
 
             RebuildData(onlySendBufferOnChange);
             OnSettingsChanged();
 
             IsReady = true;
 
-            if (!IsEmpty)
-                for (int i = 0; i < _sdfComponents.Count; i++)
-                    _sdfComponents[i].Run();
+            if (IsEmpty) return;
+            {
+                foreach (var sdfComponent in _sdfComponents)
+                    sdfComponent.Run();
+            }
         }
 
         /// <summary>
@@ -323,8 +298,8 @@ namespace Source.SDFs
         /// <param name="onlySendBufferOnChange">Whether to invoke the components and inform them the buffer has changed. This is only really necessary when the size changes.</param>
         private static bool RebuildGlobalMeshData(IList<SDFObject> locals, bool onlySendBufferOnChange = true)
         {
-            int previousMeshSamplesCount = MeshSamples.Count;
-            int previousMeshUVsCount = MeshPackedUVs.Count;
+            var previousMeshSamplesCount = MeshSamples.Count;
+            var previousMeshUVsCount = MeshPackedUVs.Count;
 
             MeshSamples.Clear();
             MeshPackedUVs.Clear();
@@ -333,22 +308,20 @@ namespace Source.SDFs
             MeshSdfUVStartIndices.Clear();
 
             // remove null refs
-            for (int i = GlobalSDFMeshes.Count - 1; i >= 0; --i)
+            for (var i = GlobalSDFMeshes.Count - 1; i >= 0; --i)
                 if (GlobalSDFMeshes[i] == null || GlobalSDFMeshes[i].Asset == null)
                     GlobalSDFMeshes.RemoveAt(i);
 
-            for (int i = 0; i < locals.Count; i++)
-                if (locals[i] is SDFMesh mesh && !GlobalSDFMeshes.Contains(mesh))
+            foreach (var sdfObj in locals)
+                if (sdfObj is SDFMesh mesh && !GlobalSDFMeshes.Contains(mesh))
                     GlobalSDFMeshes.Add(mesh);
 
             // 循环遍历每个网格，将其样本/uv添加到样本缓冲区中，并注意每个网格样本在缓冲区中的起始位置。检查重复，这样我们就不会两次向样本缓冲区添加相同的网格
             // loop over each mesh, adding its samples/uvs to the sample buffer
             // and taking note of where each meshes samples start in the buffer.
             // check for repeats so we don't add the same mesh to the samples buffer twice
-            for (int i = 0; i < GlobalSDFMeshes.Count; i++)
+            foreach (var mesh in GlobalSDFMeshes)
             {
-                SDFMesh mesh = GlobalSDFMeshes[i];
-
                 // ignore meshes which are in the list but not present in any group
                 if (MeshCounts.TryGetValue(mesh.ID, out int count) && count <= 0)
                     continue;
@@ -357,20 +330,20 @@ namespace Source.SDFs
 
                 if (!MeshSdfSampleStartIndices.ContainsKey(mesh.ID))
                 {
-                    int startIndex = MeshSamples.Count;
+                    var startIndex = MeshSamples.Count;
                     MeshSamples.AddRange(samples);
                     MeshSdfSampleStartIndices.Add(mesh.ID, startIndex);
                 }
 
                 if (mesh.Asset.HasUVs && !MeshSdfUVStartIndices.ContainsKey(mesh.ID))
                 {
-                    int startIndex = MeshPackedUVs.Count;
+                    var startIndex = MeshPackedUVs.Count;
                     MeshPackedUVs.AddRange(packedUVs);
                     MeshSdfUVStartIndices.Add(mesh.ID, startIndex);
                 }
             }
 
-            bool newBuffers = false;
+            var newBuffers = false;
 
             if (_meshSamplesBuffer == null || !_meshSamplesBuffer.IsValid() ||
                 previousMeshSamplesCount != MeshSamples.Count)
@@ -412,10 +385,10 @@ namespace Source.SDFs
 
             ClearNulls(_sdfObjects);
 
-            for (int i = 0; i < _sdfObjects.Count; i++)
+            foreach (var sdfObj in _sdfObjects)
             {
-                _dataSiblingIndices.Add(_sdfObjects[i].transform.GetSiblingIndex());
-                _sdfObjects[i].SetOrderClean();
+                _dataSiblingIndices.Add(sdfObj.transform.GetSiblingIndex());
+                sdfObj.SetOrderClean();
             }
 
             _sdfObjects = _sdfObjects.OrderBy(d => _dataSiblingIndices[_sdfObjects.IndexOf(d)]).ToList();
@@ -434,28 +407,23 @@ namespace Source.SDFs
             _isLocalDataDirty = false;
 
             // should we rebuild the buffers which contain mesh sample + uv data?
-            bool globalBuffersChanged = false;
+            var globalBuffersChanged = false;
             if (_meshSamplesBuffer == null || !_meshSamplesBuffer.IsValid() || _meshPackedUVsBuffer == null ||
                 !_meshPackedUVsBuffer.IsValid() || _isGlobalMeshDataDirty)
                 globalBuffersChanged = RebuildGlobalMeshData(_sdfObjects, onlySendBufferOnChange);
 
             // memorize the size of the array before clearing it, for later comparison
-            int previousCount = _data.Count;
+            var previousCount = _data.Count;
             _data.Clear();
             _materials.Clear();
 
             // add all the sdf objects
-            for (int i = 0; i < _sdfObjects.Count; i++)
+            foreach (var sdfObject in _sdfObjects.Where(sdfObject => sdfObject))
             {
-                SDFObject sdfObject = _sdfObjects[i];
-
-                if (!sdfObject)
-                    continue;
-
                 sdfObject.SetClean();
 
-                int meshStartIndex = -1;
-                int uvStartIndex = -1;
+                var meshStartIndex = -1;
+                var uvStartIndex = -1;
 
                 if (sdfObject is SDFMesh mesh)
                 {
@@ -474,7 +442,7 @@ namespace Source.SDFs
                 _materials.Add(sdfObject.GetMaterial());
             }
 
-            bool sendBuffer = !onlySendBufferOnChange;
+            var sendBuffer = !onlySendBufferOnChange;
 
             // check whether we need to create a new buffer. buffers are fixed sizes so the most common occasion for this is simply a change of size
             if (_dataBuffer == null || !_dataBuffer.IsValid() || previousCount != _data.Count)
@@ -499,8 +467,8 @@ namespace Source.SDFs
             // if the buffer is new, the size has changed, or if it's forced, we resend the buffer to the sdf group component classes
             if (sendBuffer)
             {
-                for (int i = 0; i < _sdfComponents.Count; i++)
-                    _sdfComponents[i].UpdateDataBuffer(_dataBuffer, _materialBuffer, _data.Count);
+                foreach (var sdfGroupCom in _sdfComponents)
+                    sdfGroupCom.UpdateDataBuffer(_dataBuffer, _materialBuffer, _data.Count);
             }
 
             if (_data.Count > 0)
@@ -528,7 +496,7 @@ namespace Source.SDFs
         /// <summary>
         /// To be called whenever the settings universal to this group change.
         /// </summary>
-        public void OnSettingsChanged()
+        private void OnSettingsChanged()
         {
             _settingsArray[0] = new Settings()
             {
@@ -544,8 +512,8 @@ namespace Source.SDFs
                 _settingsBuffer = new ComputeBuffer(1, Settings.Stride, ComputeBufferType.Structured);
             }
 
-            for (int i = 0; i < _sdfComponents.Count; i++)
-                _sdfComponents[i].UpdateSettingsBuffer(_settingsBuffer);
+            foreach (var sdfGroupCom in _sdfComponents)
+                sdfGroupCom.UpdateSettingsBuffer(_settingsBuffer);
 
             Mapper.SetSettings(_settingsArray[0]);
 
@@ -592,10 +560,10 @@ namespace Source.SDFs
 
         public Vector3 GetNearestPointOnSurface(Vector3 p) => GetNearestPointOnSurface(p, out _, out _);
 
-        public Vector3 GetNearestPointOnSurface(Vector3 p, out float signedDistance) =>
+        private Vector3 GetNearestPointOnSurface(Vector3 p, out float signedDistance) =>
             GetNearestPointOnSurface(p, out signedDistance, out _);
 
-        public Vector3 GetNearestPointOnSurface(Vector3 p, out float signedDistance, out Vector3 direction)
+        private Vector3 GetNearestPointOnSurface(Vector3 p, out float signedDistance, out Vector3 direction)
         {
             signedDistance = Mapper.Map(p);
             direction = -Mapper.MapNormal(p);
@@ -607,7 +575,7 @@ namespace Source.SDFs
 
         public float GetDistanceToSurface(Vector3 p) => Mapper.Map(p);
 
-        public bool OverlapSphere(Vector3 centre, float radius) => Mapper.Map(centre) <= radius;
+        private bool OverlapSphere(Vector3 centre, float radius) => Mapper.Map(centre) <= radius;
 
         //public bool OverlapBox(Vector3 centre, Vector3 halfExtents, bool surfaceOnly = true) => OverlapBox(centre, halfExtents, Quaternion.identity, surfaceOnly);
 
@@ -616,20 +584,8 @@ namespace Source.SDFs
             if (!OverlapSphere(centre, halfExtents.magnitude))
                 return false;
 
-            Vector3 maxBounds = centre + halfExtents;
-            Vector3 minBounds = centre - halfExtents;
-
-            bool Check(Vector3 p)
-            {
-                Vector3 surfaceP = GetNearestPointOnSurface(p, out float signedDistance);
-
-                bool isInside =
-                    surfaceP.x >= minBounds.x && surfaceP.x <= maxBounds.x &&
-                    surfaceP.y >= minBounds.y && surfaceP.y <= maxBounds.y &&
-                    surfaceP.z >= minBounds.z && surfaceP.z <= maxBounds.z;
-
-                return isInside;
-            }
+            var maxBounds = centre + halfExtents;
+            var minBounds = centre - halfExtents;
 
             return (Check(centre) ||
                     Check(centre + halfExtents) ||
@@ -640,6 +596,18 @@ namespace Source.SDFs
                     Check(centre + new Vector3(-halfExtents.x, halfExtents.y, halfExtents.z)) ||
                     Check(centre + new Vector3(-halfExtents.x, halfExtents.y, -halfExtents.z)) ||
                     Check(centre + new Vector3(-halfExtents.x, -halfExtents.y, halfExtents.z)));
+
+            bool Check(Vector3 p)
+            {
+                var surfaceP = GetNearestPointOnSurface(p, out float signedDistance);
+
+                var isInside =
+                    surfaceP.x >= minBounds.x && surfaceP.x <= maxBounds.x &&
+                    surfaceP.y >= minBounds.y && surfaceP.y <= maxBounds.y &&
+                    surfaceP.z >= minBounds.z && surfaceP.z <= maxBounds.z;
+
+                return isInside;
+            }
         }
 
         /// <summary>
@@ -653,7 +621,7 @@ namespace Source.SDFs
 
         #region Helper Methods
 
-        private void ClearNulls<T>(List<T> list) where T : MonoBehaviour
+        private static void ClearNulls<T>(IList<T> list) where T : MonoBehaviour
         {
             for (var i = list.Count - 1; i >= 0; --i)
                 if (!list[i])
