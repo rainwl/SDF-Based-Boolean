@@ -1,5 +1,11 @@
 # SDF-Based Boolean
 
+## [2023.11.12]
+
+![](https://pic4rain.oss-cn-beijing.aliyuncs.com/img/Screenshot%202023-11-12%20223337.png)
+
+Click `MeshToSDF` ,and choose the Mesh ,then click the `Generate` and `Save` to store the sdf data for mesh.
+
 ## Approach
 
 ### I.Set Operations between SDFs
